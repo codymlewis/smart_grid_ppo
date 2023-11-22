@@ -204,5 +204,5 @@ if __name__ == "__main__":
             print()
             print(f"Ran the network for {i + 1} time steps")
             break
-        if i % 10 == 0:
-            print(".", end="")
+        if i % 10 == 0 and i > 0:
+            print("." * (i // 10), end="\r")
