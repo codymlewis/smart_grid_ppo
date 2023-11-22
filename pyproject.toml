@@ -1,0 +1,29 @@
+[tool.poetry]
+name = "smart-grid-test"
+version = "0.1.0"
+description = ""
+authors = ["Cody Lewis <hello@codymlewis.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+grid2op = "^1.9.6"
+setuptools = "^68.2.2"
+tqdm = "^4.66.1"
+jax = "^0.4.20"
+chex = "^0.1.84"
+optax = "^0.1.7"
+flax = "^0.7.5"
+distrax = "^0.1.5"
+
+[tool.poetry.group.dev.dependencies]
+autopep8 = "^2.0.4"
+jedi = "^0.19.1"
+flake8 = "^6.1.0"
+python-lsp-server = "^1.8.0"
+yapf = "^0.40.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
