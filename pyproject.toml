@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "smart-grid-test"
+name = "smart-grid-ppo"
 version = "0.1.0"
 description = ""
 authors = ["Cody Lewis <hello@codymlewis.com>"]
