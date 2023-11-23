@@ -95,7 +95,7 @@ class TransitionBatch(NamedTuple):
         )
 
 
-@jax.jit
+# @jax.jit
 def learner_step(
     state: train_state.TrainState,
     transitions: TransitionBatch,
@@ -134,7 +134,7 @@ def learner_step(
         actor_loss2 = (jnp.clip(ratio, 1 - eps, 1 + eps).T * norm_advantages).T
         actor_loss = jnp.mean(jnp.minimum(actor_loss1, actor_loss2))
         # Entropy loss
-        entropy = pi.entropy().mean()
+        entropy = jax.vmap(lambda pi: pi.entropy())(pis).mean()
         # Then the full loss
         loss = actor_loss - coef1 * value_losses + coef2 * entropy
         return -loss  # Flip the sign to maximise the loss
