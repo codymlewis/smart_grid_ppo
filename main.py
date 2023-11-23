@@ -4,12 +4,14 @@ task. The implementation of PPO in https://github.com/luchris429/purejaxrl was v
 """
 
 from __future__ import annotations
+import os
 from typing import Sequence, NamedTuple, Tuple
 import functools
 import math
 import itertools
 import grid2op
 import grid2op.Converter
+from lightsim2grid import LightSimBackend
 import numpy as np
 import jax
 import jax.numpy as jnp
@@ -150,8 +152,12 @@ if __name__ == "__main__":
     num_timesteps = 100
     num_actors = 15
     num_steps = 10
-    env = grid2op.make("rte_case14_realistic")
-    obs = env.reset()
+    env_name = "rte_case14_realistic"
+    env = grid2op.make(env_name)
+    if not os.path.exists(grid2op.get_current_local_dir() + f"/{env_name}_test"):
+        env.train_val_split_random(pct_val=0.0, add_for_test="test", pct_test=10.0)
+    train_env = grid2op.make(env_name + "_train", backend=LightSimBackend())
+    obs = train_env.reset()
     model = ActorCritic(env.action_space.n)
     rngkey = jax.random.PRNGKey(seed)
     params_rngkey, rngkey = jax.random.split(rngkey)
@@ -162,6 +168,8 @@ if __name__ == "__main__":
         tx=optax.amsgrad(1e-4),
     )
     converter = grid2op.Converter.ToVect(env.action_space)
+    obs_shape = obs.to_vect().shape
+    act_shape = (env.action_space.n,)
 
     for e in (pbar := trange(num_episodes)):
         # We generate all of the random generation keys that we will need pre-emptively
@@ -169,22 +177,22 @@ if __name__ == "__main__":
         rngkey = rngkeys[0]
         rngkeys = iter(rngkeys[1:])
         # Allocate the memory for our data batch and the index where each sample is stored
-        transitions = TransitionBatch.init(num_timesteps, num_actors, obs.to_vect().shape, (env.action_space.n,), seed + e)
+        transitions = TransitionBatch.init(num_timesteps, num_actors, obs_shape, act_shape, seed + e)
         counter = itertools.count()
         # Now we perform the actor loop from Algorithm 1 in http://arxiv.org/abs/1707.06347
         for a in range(num_actors):
-            last_obs = env.reset().to_vect()
+            last_obs = train_env.reset().to_vect()
             for t in range(num_timesteps):
                 i = next(counter)
                 pi, transitions.values[i] = state.apply_fn(state.params, last_obs)
                 transitions.actions[i] = pi.sample(seed=next(rngkeys))
                 transitions.log_probs[i] = pi.log_prob(transitions.actions[i])
-                obs, transitions.rewards[i], transitions.dones[i], info = env.step(
+                obs, transitions.rewards[i], transitions.dones[i], info = train_env.step(
                     converter.convert_act(transitions.actions[i])
                 )
                 transitions.obs[i] = last_obs = obs.to_vect()
                 if transitions.dones[i]:
-                    last_obs = env.reset().to_vect()
+                    last_obs = train_env.reset().to_vect()
 
         # Then we peform the updates with our newly formed batch of data
         for i in range(num_steps):
@@ -193,16 +201,17 @@ if __name__ == "__main__":
         pbar.set_postfix_str(f"Loss: {loss:.5f}")
 
     print("Now, let's see how long the trained model can run the power network.")
-    obs = env.reset().to_vect()
+    test_env = grid2op.make(env_name + "_test", backend=LightSimBackend())
+    obs = test_env.reset().to_vect()
     for i in itertools.count():
         rngkey, _rngkey = jax.random.split(rngkey)
         pi, _ = state.apply_fn(state.params, obs)
         action = pi.sample(seed=_rngkey)
-        obs, reward, done, info = env.step(converter.convert_act(action))
+        obs, reward, done, info = test_env.step(converter.convert_act(action))
         obs = obs.to_vect()
         if done:
             print()
             print(f"Ran the network for {i + 1} time steps")
             break
-        if i % 10 == 0 and i > 0:
-            print("." * (i // 10), end="\r")
+        if i % 100 == 0 and i > 0:
+            print("." * (i // 100), end="\r")
