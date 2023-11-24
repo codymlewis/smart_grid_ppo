@@ -157,10 +157,10 @@ def learner_step(
 
 if __name__ == "__main__":
     seed = 63
-    batch_size = 12
-    num_episodes = 10
-    num_timesteps = 10
-    num_actors = 2
+    batch_size = 128
+    num_episodes = 100
+    num_timesteps = 100
+    num_actors = 15
     num_steps = 10
     env_name = "rte_case14_realistic"
     env = grid2op.make(env_name)
