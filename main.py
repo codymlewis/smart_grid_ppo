@@ -40,7 +40,8 @@ class ActorCritic(nn.Module):
         actor_mean = nn.Dense(
             self.n_actions, kernel_init=nn.initializers.orthogonal(0.01), bias_init=nn.initializers.constant(0.0)
         )(actor_mean)
-        pi = distrax.MultivariateNormalDiag(actor_mean)
+        actor_logtstd = self.param("log_std", nn.initializers.zeros, (self.n_actions,))
+        pi = distrax.MultivariateNormalDiag(actor_mean, jnp.exp(actor_logtstd))
 
         critic = nn.Dense(
             64, kernel_init=nn.initializers.orthogonal(math.sqrt(2)), bias_init=nn.initializers.constant(0.0)
@@ -65,7 +66,7 @@ class TransitionBatch(NamedTuple):
     values: chex.Array
     log_probs: chex.Array
     dones: chex.Array
-    rng: jax.random.PRNGKey
+    rng: np.random.Generator
 
     def init(
         num_timesteps: int, num_actors: int, obs_shape: Sequence[int], act_shape: Sequence[int], seed: int = 0
@@ -78,27 +79,36 @@ class TransitionBatch(NamedTuple):
             np.zeros(n, dtype=np.float32),
             np.zeros(n, dtype=np.float32),
             np.zeros(n, dtype=np.float32),
-            jax.random.PRNGKey(seed),
+            np.random.default_rng(seed),
         )
 
-    def sample(self, batch_size: int = 128) -> TransitionBatch:
-        _rng, rng = jax.random.split(self.rng)
-        idx = jax.random.choice(_rng, jnp.arange(self.obs.shape[0]), shape=(batch_size,), replace=False)
-        return TransitionBatch(
+    def sample(self, index: int, batch_size: int = 128) -> TransitionMinibatch:
+        idx_start = self.rng.choice(self.obs.shape[0])
+        idx = np.arange(idx_start, idx_start + batch_size) % self.obs.shape[0]
+        return TransitionMinibatch(
             self.obs[idx],
             self.actions[idx],
             self.rewards[idx],
             self.values[idx],
             self.log_probs[idx],
             self.dones[idx],
-            rng,
         )
 
 
-# @jax.jit
+class TransitionMinibatch(NamedTuple):
+    "Class to store a minibatch of the transition data."
+    obs: chex.Array
+    actions: chex.Array
+    rewards: chex.Array
+    values: chex.Array
+    log_probs: chex.Array
+    dones: chex.Array
+
+
+@jax.jit
 def learner_step(
     state: train_state.TrainState,
-    transitions: TransitionBatch,
+    transitions: TransitionMinibatch,
     gamma: float = 0.99,
     lamb: float = 0.95,
     eps: float = 0.2,
@@ -195,8 +205,8 @@ if __name__ == "__main__":
                     last_obs = train_env.reset().to_vect()
 
         # Then we peform the updates with our newly formed batch of data
-        for i in range(num_steps):
-            trans_batch = transitions.sample(batch_size)
+        for _ in range(num_steps):
+            trans_batch = transitions.sample(i, batch_size)
             loss, state = learner_step(state, trans_batch)
         pbar.set_postfix_str(f"Loss: {loss:.5f}")
 
