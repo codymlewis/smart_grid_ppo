@@ -82,9 +82,9 @@ class TransitionBatch(NamedTuple):
             np.random.default_rng(seed),
         )
 
-    def sample(self, index: int, batch_size: int = 128) -> TransitionMinibatch:
-        idx_start = self.rng.choice(self.obs.shape[0])
-        idx = np.arange(idx_start, idx_start + batch_size) % self.obs.shape[0]
+    def sample(self, batch_size: int = 128) -> TransitionMinibatch:
+        idx_start = self.rng.choice(self.obs.shape[0] - batch_size)
+        idx = np.arange(idx_start, idx_start + batch_size)
         return TransitionMinibatch(
             self.obs[idx],
             self.actions[idx],
@@ -157,10 +157,10 @@ def learner_step(
 
 if __name__ == "__main__":
     seed = 63
-    batch_size = 128
-    num_episodes = 100
-    num_timesteps = 100
-    num_actors = 15
+    batch_size = 12
+    num_episodes = 10
+    num_timesteps = 10
+    num_actors = 2
     num_steps = 10
     env_name = "rte_case14_realistic"
     env = grid2op.make(env_name)
@@ -206,7 +206,7 @@ if __name__ == "__main__":
 
         # Then we peform the updates with our newly formed batch of data
         for _ in range(num_steps):
-            trans_batch = transitions.sample(i, batch_size)
+            trans_batch = transitions.sample(batch_size)
             loss, state = learner_step(state, trans_batch)
         pbar.set_postfix_str(f"Loss: {loss:.5f}")
 
